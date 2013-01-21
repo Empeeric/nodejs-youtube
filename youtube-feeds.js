@@ -31,7 +31,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org>
 */
 
-var https = require('https'),
+var request = require('request'),
     xml2json = require('node-xml2json'),
     querystring = require('querystring')
 
@@ -217,26 +217,22 @@ app.talk = function( path, fields, cb, oldJsonKey ) {
 	
 	// prepare
 	var options = {
-		hostname:	'gdata.youtube.com',
-		port:		443,
-		path:		'/'+ path +'?'+ querystring.stringify( fields ),
+		uri:	'https://gdata.youtube.com/'+ path +'?'+ querystring.stringify( fields ),
 		headers: {
 			'User-Agent':	'youtube-feeds.js (https://github.com/fvdm/nodejs-youtube)',
 			'Accept':	'application/json'
 		},
-		method:		'GET'
+		method:		'GET',
+        timeout: app.timeout
 	}
 	
 	// request
-	var request = https.request( options, function( response ) {
+	var req = request( options, function  (error, response, body) {
+        if (err) cb(err);
+        if (response.statusCode >= 300) cb(new Error( response.statusCode ));
 		
-		// response
-		var data = ''
-		response.on( 'data', function( chunk ) { data += chunk })
-		response.on( 'end', function() {
 			
-			data = data.toString('utf8').trim()
-			var error = null
+        var data = body.toString('utf8').trim();
 			
 			// validate
 			if( data.match( /^(\{.*\}|\[.*\])$/ ) ) {
@@ -315,32 +311,14 @@ app.talk = function( path, fields, cb, oldJsonKey ) {
 			}
 			cb( err, data )
 			
-		})
+
 		
-		// early disconnect
-		response.on( 'close', function() {
-			var err = new Error( 'connection closed' )
-			err.origin = 'api'
-			cb( err )
-		})
 		
 	})
 	
-	// no endless waiting
-	request.setTimeout( app.timeout, function() {
-		request.destroy()
-	})
 	
-	// connection error
-	request.on( 'error', function( error ) {
-		var err = new Error( 'connection error' )
-		err.origin = 'request'
-		err.details = error
-		cb( err )
-	})
 	
-	// perform and finish request
-	request.end()
+	return req;
 	
 }
 
